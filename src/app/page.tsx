@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { fetchCategories, fetchCities, fetchDistricts, fetchRankings } from "@/lib/api";
 import type { DistrictRanking } from "@/lib/types";
 import { SearchForm } from "@/components/search-form";
+import { LogoutButton } from "@/components/logout-button";
 import { MetricCards } from "@/components/metric-cards";
 import { RankingList } from "@/components/ranking-list";
 import { DetailPanel } from "@/components/detail-panel";
@@ -41,6 +42,7 @@ export default function Home() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [hoveredDistrict, setHoveredDistrict] = useState<DistrictRanking | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Mode state
   const [mode, setMode] = useState<Mode>(null);
@@ -54,10 +56,12 @@ export default function Home() {
       fetchCategories(),
       fetchCities(),
       fetchDistricts().catch(() => [] as string[]),
-    ]).then(([cats, cits, dists]) => {
+      fetch("/api/auth/me").then((r) => r.json()).catch(() => ({ role: "user" })),
+    ]).then(([cats, cits, dists, me]) => {
       setCategories(cats);
       setCities(cits);
       setAllDistricts(dists);
+      setIsAdmin((me as { role: string }).role === "admin");
     });
   }, []);
 
@@ -128,18 +132,21 @@ export default function Home() {
                 Find the best district for your next branch
               </p>
             </div>
-            {mode !== null && (
-              <button
-                onClick={handleStartOver}
-                className="text-emerald-200 hover:text-white text-xs font-medium transition-colors flex items-center gap-1"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-                Start Over
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {mode !== null && (
+                <button
+                  onClick={handleStartOver}
+                  className="text-emerald-200 hover:text-white text-xs font-medium transition-colors flex items-center gap-1"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                  </svg>
+                  Start Over
+                </button>
+              )}
+              <LogoutButton />
+            </div>
           </div>
           {mode !== null && (
             <div className="mt-2 flex items-center gap-1.5">
@@ -283,6 +290,7 @@ export default function Home() {
                   rankings={rankings}
                   selectedKey={selectedKey}
                   onSelect={handleDistrictClick}
+                  isAdmin={isAdmin}
                 />
               </div>
             </>
@@ -333,6 +341,7 @@ export default function Home() {
           selectedKey={selectedKey}
           onDistrictClick={handleDistrictClick}
           onDistrictHover={handleDistrictHover}
+          isAdmin={isAdmin}
         />
 
         {/* Hover info */}

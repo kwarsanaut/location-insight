@@ -15,18 +15,18 @@ interface RankingMapProps {
   selectedKey: string | null;
   onDistrictClick: (key: string) => void;
   onDistrictHover: (district: DistrictRanking | null) => void;
+  isAdmin?: boolean;
 }
 
 /* ── Numbered circle icon ──────────────────────── */
 function makeNumberIcon(rank: number) {
-  const color = RANK_COLORS[rank - 1] ?? "#e8e8e8";
   return L.divIcon({
     html: `<div style="
       font-size:12px;font-weight:700;color:#fff;
-      background:${color};border:2px solid rgba(255,255,255,0.9);
+      background:#1a5c38;border:2px solid #fff;
       border-radius:50%;width:26px;height:26px;
       display:flex;align-items:center;justify-content:center;
-      box-shadow:0 2px 8px rgba(0,0,0,.3);
+      box-shadow:0 2px 8px rgba(0,0,0,.45);
     ">${rank}</div>`,
     iconSize: [26, 26],
     iconAnchor: [13, 13],
@@ -87,7 +87,7 @@ function ResetOnNewRankings({ rankingsKey }: { rankingsKey: string }) {
 }
 
 /* ── Main map component ────────────────────────── */
-export function RankingMap({ rankings, selectedKey, onDistrictClick, onDistrictHover }: RankingMapProps) {
+export function RankingMap({ rankings, selectedKey, onDistrictClick, onDistrictHover, isAdmin = false }: RankingMapProps) {
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
   const [flyBounds, setFlyBounds] = useState<L.LatLngBounds | null>(null);
   const geoJsonRef = useRef<L.GeoJSON | null>(null);
@@ -105,8 +105,12 @@ export function RankingMap({ rankings, selectedKey, onDistrictClick, onDistrictH
     highlightedRef.current = null;
   }, [rankings]);
 
+  // For non-admin: only the top 3 of the countdown (ranks N, N-1, N-2) are visible
+  const minVisibleRank = isAdmin ? 1 : Math.max(1, rankings.length - 2);
+  const visibleRankings = rankings.filter((r) => r.rank >= minVisibleRank);
+
   const lookup = new Map<string, DistrictRanking>();
-  for (const r of rankings) {
+  for (const r of visibleRankings) {
     lookup.set(r.key, r);
   }
 
@@ -183,7 +187,7 @@ export function RankingMap({ rankings, selectedKey, onDistrictClick, onDistrictH
     );
   }
 
-  // Pre-compute markers — deduplicate by district key
+  // Pre-compute markers — deduplicate by district key, only for visible rankings
   const seenKeys = new Set<string>();
   const markerData: { rank: number; key: string; lat: number; lng: number; district: string }[] = [];
   for (const feature of geojson.features) {
@@ -211,7 +215,7 @@ export function RankingMap({ rankings, selectedKey, onDistrictClick, onDistrictH
         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
       />
       <GeoJSON
-        key={rankings.map((r) => r.key).join(",") + (selectedKey ?? "")}
+        key={rankings.map((r) => r.key).join(",") + (selectedKey ?? "") + String(isAdmin)}
         ref={geoJsonRef as React.Ref<L.GeoJSON>}
         data={geojson}
         style={styleFeature}
@@ -224,17 +228,12 @@ export function RankingMap({ rankings, selectedKey, onDistrictClick, onDistrictH
           key={m.key}
           position={[m.lat, m.lng]}
           icon={makeNumberIcon(m.rank)}
-          eventHandlers={{
-            click: () => {
-              const entry = rankings.find((r) => r.rank === m.rank);
-              if (entry) onDistrictClick(entry.key);
-            },
-          }}
+          eventHandlers={{ click: () => onDistrictClick(m.key) }}
         >
           <Tooltip direction="top" offset={[0, -14]}>
             <span className="font-semibold">#{m.rank} {m.district}</span>
             <br />
-            <span className="text-xs">{formatCompact(rankings.find((r) => r.rank === m.rank)?.pred_mean ?? 0)}</span>
+            <span className="text-xs">{formatCompact(visibleRankings.find((r) => r.rank === m.rank)?.pred_mean ?? 0)}</span>
           </Tooltip>
         </Marker>
       ))}
